@@ -60,6 +60,21 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         modelBuilder.Entity<Kyc>()
             .HasIndex(k => k.UserId)
             .IsUnique();
-
+        
+        modelBuilder.Entity<RideStatusHistory>()
+            .Property(r => r.PreviousStatus)
+            .HasConversion<string>();
+        
+        modelBuilder.Entity<RideStatusHistory>()
+            .Property(r => r.NewStatus)
+            .HasConversion<string>();
+        
+        modelBuilder.Entity<Vehicle>()
+            .HasIndex(v => v.DriverId)
+            .IsUnique();
+        
+        modelBuilder.Entity<Vehicle>()
+            .HasIndex(v => v.PlateNumber)
+            .IsUnique();
     }
 }
