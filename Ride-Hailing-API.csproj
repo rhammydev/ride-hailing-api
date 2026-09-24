@@ -32,8 +32,8 @@
     <ItemGroup>
       <Folder Include="Controllers\" />
       <Folder Include="DTOs\Ride\" />
-      <Folder Include="Extensions\" />
-      <Folder Include="Repositories\" />
+      <Folder Include="Repositories\Implementations\" />
+      <Folder Include="Repositories\Interfaces\" />
       <Folder Include="Services\" />
     </ItemGroup>
 
