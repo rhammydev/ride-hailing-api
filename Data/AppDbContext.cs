@@ -12,6 +12,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<Kyc> Kycs { get; set; }
     public DbSet<Vehicle> Vehicles { get; set; }
     public DbSet<RideStatusHistory> RidesStatusHistories { get; set; }
+    public DbSet<Notification> Notifications { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
