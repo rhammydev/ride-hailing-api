@@ -1,11 +1,12 @@
-<Project Sdk="Microsoft.NET.Sdk.Web">
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
 
     <PropertyGroup>
         <TargetFramework>net9.0</TargetFramework>
         <Nullable>enable</Nullable>
         <ImplicitUsings>enable</ImplicitUsings>
         <RootNamespace>Ride_Hailing_API</RootNamespace>
-    </PropertyGroup>
+      <UserSecretsId>c3098179-1a64-4cc1-a0db-ba15d0ad80a0</UserSecretsId>
+  </PropertyGroup>
 
     <ItemGroup>
         <PackageReference Include="BCrypt.Net-Next" Version="4.2.0" />
@@ -34,7 +35,7 @@
       <Folder Include="DTOs\Ride\" />
       <Folder Include="Repositories\Implementations\" />
       <Folder Include="Repositories\Interfaces\" />
-      <Folder Include="Services\" />
+      <Folder Include="Services\Implementations\" />
     </ItemGroup>
 
 </Project>

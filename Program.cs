@@ -12,6 +12,7 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 builder.Services.AddControllers();
 builder.Services.AddValidatorsFromAssemblyContaining<Program>();
 builder.Services.AddRepositories();
+builder.Services.AddApplicationServices();
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
 
