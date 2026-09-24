@@ -17,7 +17,7 @@ public interface IRideRepository
     void Update(Ride ride);
 
     Task AddStatusHistoryAsync(RideStatusHistory history);
-    Task<IReadOnlyList<RideStatusHistory>> GetStatusHistoryByRideIdAsync(int rideId);
+    Task<List<RideStatusHistory>> GetStatusHistoryByRideIdAsync(int rideId);
 
     Task SaveChangesAsync();
 }
