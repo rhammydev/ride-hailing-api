@@ -1,71 +1,81 @@
 using Ride_Hailing_API.Domain.Entities;
-using Ride_Hailing_API.DTOs.Generic;
-using Ride_Hailing_API.Repositories.Interfaces;
 using Ride_Hailing_API.Services.Interfaces;
+using Ride_Hailing_API.Utilities;
 
 namespace Ride_Hailing_API.Services.Implementations;
 
-public class NotificationService(
-    INotificationRepository notificationRepository,
-    ILogger<NotificationService> logger) : INotificationService
+public class NotificationService(IEmailService email, ISmsService sms) : INotificationService
 {
-    public async Task<ApiResponse> SendEmailNotificationAsync(int userId, string recipientEmail, string subject, string message)
+    public Task SendOtpEmailAsync(string emailAddress, string fullName, string otp) =>
+        email.SendOtpAsync(emailAddress, fullName, otp);
+
+    public Task SendOtpSmsAsync(string? recipient, string otp) =>
+        sms.SendSmsAsync(recipient, SmsUtils.Otp(otp));
+
+    public Task SendWelcomeEmailAsync(string emailAddress, string fullName, string userId) =>
+        email.SendWelcomeAsync(emailAddress, fullName, userId);
+
+    public Task SendAccountVerifiedEmailAsync(string emailAddress, string fullName, string userId) =>
+        email.SendAccountVerifiedAsync(emailAddress, fullName, userId);
+
+    public Task SendLoginAlertAsync(string emailAddress, string fullName) =>
+        email.SendLoginAlertAsync(emailAddress, fullName);
+
+    public Task SendPasswordChangedAsync(string emailAddress, string fullName, string? phoneNumber) =>
+        Task.WhenAll(
+            email.SendPasswordChangedAsync(emailAddress, fullName),
+            sms.SendSmsAsync(phoneNumber, SmsUtils.PasswordChanged()));
+
+    public Task SendPasswordResetOtpAsync(
+        string emailAddress,
+        string fullName,
+        string? phoneNumber,
+        string otp) =>
+        Task.WhenAll(
+            email.SendPasswordResetOtpAsync(emailAddress, fullName, otp),
+            sms.SendSmsAsync(phoneNumber, SmsUtils.PasswordResetOtp(otp)));
+
+    public Task SendProfileUpdatedEmailAsync(string emailAddress, string fullName) =>
+        email.SendProfileUpdatedAsync(emailAddress, fullName);
+
+    public Task SendAccountDeactivatedAsync(string emailAddress, string fullName, string? phoneNumber) =>
+        Task.WhenAll(
+            email.SendAccountDeactivatedAsync(emailAddress, fullName),
+            sms.SendSmsAsync(phoneNumber, SmsUtils.AccountDeactivated()));
+
+    public Task SendRideStatusAsync(User passenger, User? driver, Ride ride, string status)
     {
-        try
+        var rideRef = ride.Reference ?? ride.Id.ToString();
+        var pickup = ride.PickupLocation ?? "N/A";
+        var destination = ride.Destination ?? "N/A";
+        var subject = $"Ride {status} - {rideRef}";
+
+        var tasks = new List<Task>
         {
-            var notification = new Notification
-            {
-                UserId = userId,
-                Type = "Email",
-                Recipient = recipientEmail,
-                Subject = subject,
-                Message = message,
-                IsSent = true,
-                SentAt = DateTime.UtcNow,
-                CreatedAt = DateTime.UtcNow
-            };
+            email.SendRideStatusAsync(passenger.Email!, FullName(passenger), subject, rideRef,
+                pickup, destination, status, ride.CancellationReason),
+            sms.SendSmsAsync(passenger.PhoneNumber, SmsUtils.RideStatus(rideRef, status))
+        };
 
-            await notificationRepository.AddAsync(notification);
-            await notificationRepository.SaveChangesAsync();
-
-            logger.LogInformation("Email notification sent to User {UserId} ({Recipient}): {Subject}", userId, recipientEmail, subject);
-
-            return ApiResponse.Success("Email notification sent successfully.");
-        }
-        catch (Exception ex)
+        if (driver != null)
         {
-            logger.LogError(ex, "Failed to send email notification to User {UserId} ({Recipient})", userId, recipientEmail);
-            return ApiResponse.Fail("Failed to send email notification.", 500, ResponseCodes.ServerError);
+            tasks.Add(email.SendRideStatusAsync(driver.Email!, FullName(driver), subject, rideRef,
+                pickup, destination, status, ride.CancellationReason));
+            tasks.Add(sms.SendSmsAsync(driver.PhoneNumber, SmsUtils.RideStatus(rideRef, status)));
         }
+
+        return Task.WhenAll(tasks);
     }
 
-    public async Task<ApiResponse> SendSmsNotificationAsync(int userId, string recipientPhone, string message)
-    {
-        try
-        {
-            var notification = new Notification
-            {
-                UserId = userId,
-                Type = "SMS",
-                Recipient = recipientPhone,
-                Subject = "SMS Alert",
-                Message = message,
-                IsSent = true,
-                SentAt = DateTime.UtcNow,
-                CreatedAt = DateTime.UtcNow
-            };
+    public Task SendDriverApprovedAsync(User driver) =>
+        Task.WhenAll(
+            email.SendDriverApprovedAsync(driver.Email!, FullName(driver)),
+            sms.SendSmsAsync(driver.PhoneNumber, SmsUtils.DriverApproved()));
 
-            await notificationRepository.AddAsync(notification);
-            await notificationRepository.SaveChangesAsync();
+    public Task SendDriverRejectedAsync(User driver, string? reason) =>
+        Task.WhenAll(
+            email.SendDriverRejectedAsync(driver.Email!, FullName(driver), reason),
+            sms.SendSmsAsync(driver.PhoneNumber, SmsUtils.DriverRejected(reason)));
 
-            logger.LogInformation("SMS notification sent to User {UserId} ({Recipient}): {Message}", userId, recipientPhone, message);
-
-            return ApiResponse.Success("SMS notification sent successfully.");
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Failed to send SMS notification to User {UserId} ({Recipient})", userId, recipientPhone);
-            return ApiResponse.Fail("Failed to send SMS notification.", 500, ResponseCodes.ServerError);
-        }
-    }
+    private static string FullName(User user) => $"{user.FirstName} {user.LastName}";
 }

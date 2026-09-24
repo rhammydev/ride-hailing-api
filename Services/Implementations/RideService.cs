@@ -201,22 +201,12 @@ public class RideService(
             await rideRepository.SaveChangesAsync();
             await auditLogRepository.SaveChangesAsync();
 
-            // Story 72: Notify passenger when driver accepts ride
-            if (ride.Passenger != null && !string.IsNullOrEmpty(ride.Passenger.Email))
+            var driverUser = await userRepository.GetByIdAsync(driverId);
+            if (ride.Passenger != null)
             {
-                var driver = await userRepository.GetByIdAsync(driverId);
-                var driverName = driver != null ? $"{driver.FirstName} {driver.LastName}".Trim() : "A driver";
-                await notificationService.SendEmailNotificationAsync(
-                    ride.PassengerId,
-                    ride.Passenger.Email,
-                    "Ride Accepted!",
-                    $"{driverName} has accepted your ride request ({ride.Reference})."
-                );
+                await notificationService.SendRideStatusAsync(ride.Passenger, driverUser, ride, "Accepted");
             }
 
-            logger.LogInformation("Ride {RideId} accepted by Driver {DriverId}", rideId, driverId);
-
-            var driverUser = await userRepository.GetByIdAsync(driverId);
             var response = MapToResponse(ride, ride.Passenger, driverUser);
             return ApiResponse.Success("Ride accepted successfully.", response);
         }
@@ -283,26 +273,16 @@ public class RideService(
             await rideRepository.SaveChangesAsync();
             await auditLogRepository.SaveChangesAsync();
 
-            // Story 73: Notify passenger when driver arrives
-            if (request.Status == RideStatus.DriverArrived && ride.Passenger != null && !string.IsNullOrEmpty(ride.Passenger.Email))
+            if (ride.Passenger != null)
             {
-                await notificationService.SendEmailNotificationAsync(
-                    ride.PassengerId,
-                    ride.Passenger.Email,
-                    "Driver Has Arrived!",
-                    $"Your driver has arrived at {ride.PickupLocation} for ride {ride.Reference}."
-                );
-            }
-
-            // Story 75: Notify passenger when ride completed
-            if (request.Status == RideStatus.Completed && ride.Passenger != null && !string.IsNullOrEmpty(ride.Passenger.Email))
-            {
-                await notificationService.SendEmailNotificationAsync(
-                    ride.PassengerId,
-                    ride.Passenger.Email,
-                    "Ride Completed",
-                    $"Your ride ({ride.Reference}) to {ride.Destination} has been completed. Thank you for riding with us!"
-                );
+                if (request.Status == RideStatus.DriverArrived)
+                {
+                    await notificationService.SendRideStatusAsync(ride.Passenger, ride.Driver, ride, "Driver Arrived");
+                }
+                else if (request.Status == RideStatus.Completed)
+                {
+                    await notificationService.SendRideStatusAsync(ride.Passenger, ride.Driver, ride, "Completed");
+                }
             }
 
             logger.LogInformation("Ride {RideId} transitioned to {NewStatus} by Driver {DriverId}", rideId, request.Status, driverId);
@@ -379,25 +359,10 @@ public class RideService(
             await rideRepository.SaveChangesAsync();
             await auditLogRepository.SaveChangesAsync();
 
-            // Story 74: Notify relevant users when ride is cancelled
-            if (ride.Passenger != null && !string.IsNullOrEmpty(ride.Passenger.Email))
+            if (ride.Passenger != null)
             {
-                await notificationService.SendEmailNotificationAsync(
-                    ride.PassengerId,
-                    ride.Passenger.Email,
-                    "Ride Cancelled",
-                    $"Your ride ({ride.Reference}) has been cancelled. Reason: {request.Reason}"
-                );
-            }
-
-            if (ride.Driver != null && !string.IsNullOrEmpty(ride.Driver.Email))
-            {
-                await notificationService.SendEmailNotificationAsync(
-                    ride.Driver.Id,
-                    ride.Driver.Email,
-                    "Assigned Ride Cancelled",
-                    $"The ride ({ride.Reference}) you were assigned to has been cancelled."
-                );
+                ride.CancellationReason = request.Reason;
+                await notificationService.SendRideStatusAsync(ride.Passenger, ride.Driver, ride, "Cancelled");
             }
 
             logger.LogInformation("Ride {RideId} cancelled by {Role} {UserId}", rideId, role, userId);

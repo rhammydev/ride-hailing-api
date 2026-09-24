@@ -107,14 +107,9 @@ public class AdminService(
             await auditLogRepository.SaveChangesAsync();
 
             var driverUser = await userRepository.GetByIdAsync(driverId);
-            if (driverUser != null && !string.IsNullOrEmpty(driverUser.Email))
+            if (driverUser != null)
             {
-                await notificationService.SendEmailNotificationAsync(
-                    driverId,
-                    driverUser.Email,
-                    "Driver Application Approved!",
-                    "Congratulations! Your driver application has been approved by the Admin. You can now toggle your availability and begin accepting rides."
-                );
+                await notificationService.SendDriverApprovedAsync(driverUser);
             }
 
             logger.LogInformation("Driver {DriverId} approved by Admin {AdminId}", driverId, adminId);
@@ -154,14 +149,9 @@ public class AdminService(
             await auditLogRepository.SaveChangesAsync();
 
             var driverUser = await userRepository.GetByIdAsync(driverId);
-            if (driverUser != null && !string.IsNullOrEmpty(driverUser.Email))
+            if (driverUser != null)
             {
-                await notificationService.SendEmailNotificationAsync(
-                    driverId,
-                    driverUser.Email,
-                    "Driver Application Update",
-                    $"Your driver application was reviewed and rejected. Reason: {request.Reason}"
-                );
+                await notificationService.SendDriverRejectedAsync(driverUser, request.Reason);
             }
 
             logger.LogInformation("Driver {DriverId} rejected by Admin {AdminId}", driverId, adminId);

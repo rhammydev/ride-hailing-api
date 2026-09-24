@@ -1,0 +1,27 @@
+namespace Ride_Hailing_API.Domain.Settings;
+
+public class SmtpMail
+{
+    public string Server { get; set; } = string.Empty;
+
+    public int Port { get; set; } = 587;
+
+    public string SenderName { get; set; } = string.Empty;
+
+    public string SenderEmail { get; set; } = string.Empty;
+
+    public string Username { get; set; } = string.Empty;
+
+    public string Password { get; set; } = string.Empty;
+}
+
+public class TelecomAbode
+{
+    public string BaseUrl { get; set; } = string.Empty;
+
+    public string ApiKey { get; set; } = string.Empty;
+
+    public string Subject { get; set; } = string.Empty;
+
+    public string? FallbackRecipient { get; set; }
+}

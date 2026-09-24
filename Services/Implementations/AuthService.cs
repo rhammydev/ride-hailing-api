@@ -80,11 +80,10 @@ public class AuthService(
             });
             await auditLogRepository.SaveChangesAsync();
 
-            await notificationService.SendEmailNotificationAsync(
-                user.Id,
+            await notificationService.SendOtpEmailAsync(
                 user.Email ?? email,
-                "Verify Your Email Address",
-                $"Welcome to Ride-Hailing API! Your email verification code is {otpCode}. It expires in 5 minutes."
+                $"{user.FirstName} {user.LastName}".Trim(),
+                otpCode
             );
 
             logger.LogInformation("Registered {Role} with ID {UserId} ({Email})", user.Role, user.Id, user.Email);
@@ -298,11 +297,11 @@ public class AuthService(
                 });
                 await auditLogRepository.SaveChangesAsync();
 
-                await notificationService.SendEmailNotificationAsync(
-                    user.Id,
+                await notificationService.SendPasswordResetOtpAsync(
                     user.Email ?? string.Empty,
-                    "Password Reset OTP",
-                    $"Your password reset code is {otpCode}. It expires in 5 minutes."
+                    $"{user.FirstName} {user.LastName}".Trim(),
+                    user.PhoneNumber,
+                    otpCode
                 );
             }
 
@@ -355,11 +354,10 @@ public class AuthService(
             });
             await auditLogRepository.SaveChangesAsync();
 
-            await notificationService.SendEmailNotificationAsync(
-                user.Id,
+            await notificationService.SendPasswordChangedAsync(
                 user.Email ?? string.Empty,
-                "Password Reset Successful",
-                "Your account password has been successfully reset. If you did not initiate this change, contact support immediately."
+                $"{user.FirstName} {user.LastName}".Trim(),
+                user.PhoneNumber
             );
 
             return ApiResponse.Success("Password has been reset successfully. You can now log in.");
@@ -400,11 +398,10 @@ public class AuthService(
             await auditLogRepository.SaveChangesAsync();
 
             // Story 76: Send security notification after a successful password change.
-            await notificationService.SendEmailNotificationAsync(
-                user.Id,
+            await notificationService.SendPasswordChangedAsync(
                 user.Email ?? string.Empty,
-                "Security Alert: Password Changed",
-                "Your account password was recently changed. If you did not perform this action, please contact support immediately."
+                $"{user.FirstName} {user.LastName}".Trim(),
+                user.PhoneNumber
             );
 
             return ApiResponse.Success("Password changed successfully.");
