@@ -111,3 +111,17 @@ public class ChangePasswordRequestValidator : AbstractValidator<ChangePasswordRe
             .Equal(x => x.NewPassword).WithMessage("Passwords do not match.");
     }
 }
+
+public class ResendOtpRequestValidator : AbstractValidator<ResendOtpRequest>
+{
+    public ResendOtpRequestValidator()
+    {
+        RuleFor(x => x.Email)
+            .ValidEmail();
+
+        RuleFor(x => x.Purpose)
+            .IsInEnum().WithMessage("Invalid OTP purpose.")
+            .Must(p => p == OtpPurpose.EmailVerification || p == OtpPurpose.PhoneVerification)
+            .WithMessage("OTP purpose must be either EmailVerification or PhoneVerification.");
+    }
+}

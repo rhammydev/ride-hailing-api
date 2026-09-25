@@ -2,9 +2,11 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Ride_Hailing_API.Domain.Entities;
 using Ride_Hailing_API.Domain.Enums;
+using Ride_Hailing_API.Domain.Settings;
 using Ride_Hailing_API.DTOs.Auth;
 using Ride_Hailing_API.DTOs.Generic;
 using Ride_Hailing_API.Repositories.Interfaces;
@@ -17,9 +19,11 @@ public class AuthService(
     IOtpRepository otpRepository,
     IAuditLogRepository auditLogRepository,
     INotificationService notificationService,
-    IConfiguration configuration,
+    IOptions<JwtSettings> jwtOptions,
     ILogger<AuthService> logger) : IAuthService
 {
+    private readonly JwtSettings _jwtSettings = jwtOptions.Value;
+
     public async Task<ApiResponse> RegisterAsync(RegisterRequest request)
     {
         try
@@ -57,19 +61,8 @@ public class AuthService(
             await userRepository.AddAsync(user);
             await userRepository.SaveChangesAsync();
 
-            var otpCode = RandomNumberGenerator.GetInt32(100000, 1000000).ToString("D6");
-            var emailOtp = new Otp
-            {
-                UserId = user.Id,
-                Code = otpCode,
-                Purpose = OtpPurpose.EmailVerification,
-                ExpiresAt = DateTime.UtcNow.AddMinutes(5),
-                IsUsed = false,
-                CreatedAt = DateTime.UtcNow
-            };
-
-            await otpRepository.AddAsync(emailOtp);
-            await otpRepository.SaveChangesAsync();
+            var emailOtpCode = await IssueOtpAsync(user.Id, OtpPurpose.EmailVerification);
+            var phoneOtpCode = await IssueOtpAsync(user.Id, OtpPurpose.PhoneVerification);
 
             await auditLogRepository.AddAsync(new AuditLog
             {
@@ -80,16 +73,19 @@ public class AuthService(
             });
             await auditLogRepository.SaveChangesAsync();
 
-            await notificationService.SendOtpEmailAsync(
-                user.Email ?? email,
-                $"{user.FirstName} {user.LastName}".Trim(),
-                otpCode
+            await Task.WhenAll(
+                notificationService.SendOtpEmailAsync(
+                    user.Email ?? email,
+                    $"{user.FirstName} {user.LastName}".Trim(),
+                    emailOtpCode
+                ),
+                notificationService.SendOtpSmsAsync(user.PhoneNumber, phoneOtpCode)
             );
 
             logger.LogInformation("Registered {Role} with ID {UserId} ({Email})", user.Role, user.Id, user.Email);
 
             return ApiResponse.Success(
-                "Registration successful. A verification OTP has been sent to your email.",
+                "Registration successful. Verification OTPs have been sent to your email and phone number.",
                 new { user.Id, user.Email, user.Role },
                 201
             );
@@ -134,6 +130,20 @@ public class AuthService(
                 await auditLogRepository.SaveChangesAsync();
 
                 return ApiResponse.Fail("Your account has been deactivated. Please contact support.", 403, ResponseCodes.Forbidden);
+            }
+
+            if (!user.IsEmailVerified)
+            {
+                await auditLogRepository.AddAsync(new AuditLog
+                {
+                    UserId = user.Id,
+                    Action = "Login",
+                    Status = "Failed - Email Not Verified",
+                    CreatedAt = DateTime.UtcNow
+                });
+                await auditLogRepository.SaveChangesAsync();
+
+                return ApiResponse.Fail("Please verify your email address before logging in.", 403, ResponseCodes.Forbidden);
             }
 
             await auditLogRepository.AddAsync(new AuditLog
@@ -263,6 +273,55 @@ public class AuthService(
         }
     }
 
+    public async Task<ApiResponse> ResendOtpAsync(ResendOtpRequest request)
+    {
+        try
+        {
+            var email = request.Email.Trim().ToLowerInvariant();
+            var user = await userRepository.GetByEmailAsync(email);
+            if (user == null)
+            {
+                return ApiResponse.Fail("User not found.", 404, ResponseCodes.NotFound);
+            }
+
+            var isEmail = request.Purpose == OtpPurpose.EmailVerification;
+            if (isEmail ? user.IsEmailVerified : user.IsPhoneVerified)
+            {
+                return ApiResponse.Success(isEmail ? "Email is already verified." : "Phone number is already verified.");
+            }
+
+            // Issuing a new OTP invalidates any previously issued, unused OTP for the same purpose.
+            var otpCode = await IssueOtpAsync(user.Id, request.Purpose);
+
+            await auditLogRepository.AddAsync(new AuditLog
+            {
+                UserId = user.Id,
+                Action = isEmail ? "ResendEmailOtp" : "ResendPhoneOtp",
+                Status = "Success",
+                CreatedAt = DateTime.UtcNow
+            });
+            await auditLogRepository.SaveChangesAsync();
+
+            if (isEmail)
+            {
+                await notificationService.SendOtpEmailAsync(
+                    user.Email ?? email,
+                    $"{user.FirstName} {user.LastName}".Trim(),
+                    otpCode
+                );
+                return ApiResponse.Success("A new verification OTP has been sent to your email.");
+            }
+
+            await notificationService.SendOtpSmsAsync(user.PhoneNumber, otpCode);
+            return ApiResponse.Success("A new verification OTP has been sent to your phone number.");
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Resend OTP failed for {Email}", request.Email);
+            return ApiResponse.Fail("An unexpected error occurred while resending the OTP.", 500, ResponseCodes.ServerError);
+        }
+    }
+
     public async Task<ApiResponse> ForgotPasswordAsync(ForgotPasswordRequest request)
     {
         try
@@ -272,21 +331,7 @@ public class AuthService(
 
             if (user != null)
             {
-                await otpRepository.InvalidateUnusedOtpsAsync(user.Id, OtpPurpose.PasswordReset);
-
-                var otpCode = RandomNumberGenerator.GetInt32(100000, 1000000).ToString("D6");
-                var resetOtp = new Otp
-                {
-                    UserId = user.Id,
-                    Code = otpCode,
-                    Purpose = OtpPurpose.PasswordReset,
-                    ExpiresAt = DateTime.UtcNow.AddMinutes(5),
-                    IsUsed = false,
-                    CreatedAt = DateTime.UtcNow
-                };
-
-                await otpRepository.AddAsync(resetOtp);
-                await otpRepository.SaveChangesAsync();
+                var otpCode = await IssueOtpAsync(user.Id, OtpPurpose.PasswordReset);
 
                 await auditLogRepository.AddAsync(new AuditLog
                 {
@@ -413,10 +458,28 @@ public class AuthService(
         }
     }
 
+    private async Task<string> IssueOtpAsync(int userId, OtpPurpose purpose)
+    {
+        await otpRepository.InvalidateUnusedOtpsAsync(userId, purpose);
+
+        var otpCode = RandomNumberGenerator.GetInt32(100000, 1000000).ToString("D6");
+        await otpRepository.AddAsync(new Otp
+        {
+            UserId = userId,
+            Code = otpCode,
+            Purpose = purpose,
+            ExpiresAt = DateTime.UtcNow.AddMinutes(5),
+            IsUsed = false,
+            CreatedAt = DateTime.UtcNow
+        });
+        await otpRepository.SaveChangesAsync();
+
+        return otpCode;
+    }
+
     private LoginResponse GenerateJwt(User user)
     {
-        var expiryMinutes = int.TryParse(configuration["Jwt:ExpirationInMinutes"], out var minutes) ? minutes : 120;
-        var expiresAt = DateTime.UtcNow.AddMinutes(expiryMinutes);
+        var expiresAt = DateTime.UtcNow.AddMinutes(_jwtSettings.ExpirationInMinutes);
 
         var fullName = $"{user.FirstName} {user.LastName}".Trim();
 
@@ -429,13 +492,12 @@ public class AuthService(
             new("phoneNumber", user.PhoneNumber ?? string.Empty)
         };
 
-        var secret = configuration["Jwt:Key"] ?? "RideHailingSuperSecretKey2026!MustBeAtLeast32BytesLong";
-        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secret));
+        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_jwtSettings.Key));
         var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
         var token = new JwtSecurityToken(
-            issuer: configuration["Jwt:Issuer"] ?? "RideHailingAPI",
-            audience: configuration["Jwt:Audience"] ?? "RideHailingUsers",
+            issuer: _jwtSettings.Issuer,
+            audience: _jwtSettings.Audience,
             claims: claims,
             expires: expiresAt,
             signingCredentials: credentials

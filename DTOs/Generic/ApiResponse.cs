@@ -12,6 +12,6 @@ public class ApiResponse
     public static ApiResponse Success(string message, object? data = null, int statusCode = 200) =>
         new() { ResponseCode = "00", ResponseMessage = message, Data = data, HttpStatusCode = statusCode };
 
-    public static ApiResponse Fail(string message, int statusCode = 400, string code = "99") =>
-        new() { ResponseCode = code, ResponseMessage = message, HttpStatusCode = statusCode };
+    public static ApiResponse Fail(string message, int statusCode = 400, string code = "99", object? data = null) =>
+        new() { ResponseCode = code, ResponseMessage = message, Data = data, HttpStatusCode = statusCode };
 }
