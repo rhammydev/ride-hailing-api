@@ -30,6 +30,7 @@ builder.Services.AddRepositories();
 builder.Services.AddApplicationServices(builder.Configuration);
 builder.Services.AddJwtAuthentication(builder.Configuration);
 builder.Services.AddSwaggerWithJwt();
+builder.Services.AddFrontendCors(builder.Configuration);
 
 var app = builder.Build();
 
@@ -41,6 +42,8 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
+app.UseCors(CorsExtensions.FrontendPolicy);
 
 app.UseAuthentication();
 app.UseAuthorization();
