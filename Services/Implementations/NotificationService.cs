@@ -1,47 +1,58 @@
 using Ride_Hailing_API.Domain.Entities;
+using Ride_Hailing_API.Repositories.Interfaces;
 using Ride_Hailing_API.Services.Interfaces;
 using Ride_Hailing_API.Utilities;
 
 namespace Ride_Hailing_API.Services.Implementations;
 
-public class NotificationService(IEmailService email, ISmsService sms) : INotificationService
+public class NotificationService(
+    IEmailService email,
+    ISmsService sms,
+    INotificationRepository notificationRepository,
+    ILogger<NotificationService> logger) : INotificationService
 {
-    public Task SendOtpEmailAsync(string emailAddress, string fullName, string otp) =>
-        email.SendOtpAsync(emailAddress, fullName, otp);
+    private const string MaskedOtp = "******";
 
-    public Task SendOtpSmsAsync(string? recipient, string otp) =>
-        sms.SendSmsAsync(recipient, SmsUtils.Otp(otp));
+    public Task SendVerificationOtpsAsync(User user, string emailOtp, string phoneOtp) =>
+        DispatchAsync(
+            Email(user, "Email verification OTP", () => email.SendOtpAsync(user.Email!, FullName(user), emailOtp)),
+            Sms(user, SmsUtils.Otp(MaskedOtp), () => sms.SendSmsAsync(user.PhoneNumber, SmsUtils.Otp(phoneOtp))));
 
-    public Task SendWelcomeEmailAsync(string emailAddress, string fullName, string userId) =>
-        email.SendWelcomeAsync(emailAddress, fullName, userId);
+    public Task SendEmailOtpAsync(User user, string otp) =>
+        DispatchAsync(Email(user, "Email verification OTP", () => email.SendOtpAsync(user.Email!, FullName(user), otp)));
 
-    public Task SendAccountVerifiedEmailAsync(string emailAddress, string fullName, string userId) =>
-        email.SendAccountVerifiedAsync(emailAddress, fullName, userId);
+    public Task SendPhoneOtpAsync(User user, string otp) =>
+        DispatchAsync(Sms(user, SmsUtils.Otp(MaskedOtp), () => sms.SendSmsAsync(user.PhoneNumber, SmsUtils.Otp(otp))));
 
-    public Task SendLoginAlertAsync(string emailAddress, string fullName) =>
-        email.SendLoginAlertAsync(emailAddress, fullName);
+    public Task SendWelcomeEmailAsync(User user) =>
+        DispatchAsync(Email(user, "Welcome to RideHail",
+            () => email.SendWelcomeAsync(user.Email!, FullName(user), user.Id.ToString())));
 
-    public Task SendPasswordChangedAsync(string emailAddress, string fullName, string? phoneNumber) =>
-        Task.WhenAll(
-            email.SendPasswordChangedAsync(emailAddress, fullName),
-            sms.SendSmsAsync(phoneNumber, SmsUtils.PasswordChanged()));
+    public Task SendAccountVerifiedEmailAsync(User user) =>
+        DispatchAsync(Email(user, "Account verified",
+            () => email.SendAccountVerifiedAsync(user.Email!, FullName(user), user.Id.ToString())));
 
-    public Task SendPasswordResetOtpAsync(
-        string emailAddress,
-        string fullName,
-        string? phoneNumber,
-        string otp) =>
-        Task.WhenAll(
-            email.SendPasswordResetOtpAsync(emailAddress, fullName, otp),
-            sms.SendSmsAsync(phoneNumber, SmsUtils.PasswordResetOtp(otp)));
+    public Task SendLoginAlertAsync(User user) =>
+        DispatchAsync(Email(user, "Login alert", () => email.SendLoginAlertAsync(user.Email!, FullName(user))));
 
-    public Task SendProfileUpdatedEmailAsync(string emailAddress, string fullName) =>
-        email.SendProfileUpdatedAsync(emailAddress, fullName);
+    public Task SendPasswordChangedAsync(User user) =>
+        DispatchAsync(
+            Email(user, "Password changed", () => email.SendPasswordChangedAsync(user.Email!, FullName(user))),
+            Sms(user, SmsUtils.PasswordChanged(), () => sms.SendSmsAsync(user.PhoneNumber, SmsUtils.PasswordChanged())));
 
-    public Task SendAccountDeactivatedAsync(string emailAddress, string fullName, string? phoneNumber) =>
-        Task.WhenAll(
-            email.SendAccountDeactivatedAsync(emailAddress, fullName),
-            sms.SendSmsAsync(phoneNumber, SmsUtils.AccountDeactivated()));
+    public Task SendPasswordResetOtpAsync(User user, string otp) =>
+        DispatchAsync(
+            Email(user, "Password reset OTP", () => email.SendPasswordResetOtpAsync(user.Email!, FullName(user), otp)),
+            Sms(user, SmsUtils.PasswordResetOtp(MaskedOtp),
+                () => sms.SendSmsAsync(user.PhoneNumber, SmsUtils.PasswordResetOtp(otp))));
+
+    public Task SendProfileUpdatedEmailAsync(User user) =>
+        DispatchAsync(Email(user, "Profile updated", () => email.SendProfileUpdatedAsync(user.Email!, FullName(user))));
+
+    public Task SendAccountDeactivatedAsync(User user) =>
+        DispatchAsync(
+            Email(user, "Account deactivated", () => email.SendAccountDeactivatedAsync(user.Email!, FullName(user))),
+            Sms(user, SmsUtils.AccountDeactivated(), () => sms.SendSmsAsync(user.PhoneNumber, SmsUtils.AccountDeactivated())));
 
     public Task SendRideStatusAsync(User passenger, User? driver, Ride ride, string status)
     {
@@ -49,33 +60,79 @@ public class NotificationService(IEmailService email, ISmsService sms) : INotifi
         var pickup = ride.PickupLocation ?? "N/A";
         var destination = ride.Destination ?? "N/A";
         var subject = $"Ride {status} - {rideRef}";
+        var smsText = SmsUtils.RideStatus(rideRef, status);
 
-        var tasks = new List<Task>
+        var recipients = driver == null ? new[] { passenger } : new[] { passenger, driver };
+        var outgoing = recipients.SelectMany(user => new[]
         {
-            email.SendRideStatusAsync(passenger.Email!, FullName(passenger), subject, rideRef,
-                pickup, destination, status, ride.CancellationReason),
-            sms.SendSmsAsync(passenger.PhoneNumber, SmsUtils.RideStatus(rideRef, status))
-        };
+            Email(user, subject, () => email.SendRideStatusAsync(user.Email!, FullName(user), subject, rideRef,
+                pickup, destination, status, ride.CancellationReason)),
+            Sms(user, smsText, () => sms.SendSmsAsync(user.PhoneNumber, smsText))
+        }).ToArray();
 
-        if (driver != null)
-        {
-            tasks.Add(email.SendRideStatusAsync(driver.Email!, FullName(driver), subject, rideRef,
-                pickup, destination, status, ride.CancellationReason));
-            tasks.Add(sms.SendSmsAsync(driver.PhoneNumber, SmsUtils.RideStatus(rideRef, status)));
-        }
-
-        return Task.WhenAll(tasks);
+        return DispatchAsync(outgoing);
     }
 
     public Task SendDriverApprovedAsync(User driver) =>
-        Task.WhenAll(
-            email.SendDriverApprovedAsync(driver.Email!, FullName(driver)),
-            sms.SendSmsAsync(driver.PhoneNumber, SmsUtils.DriverApproved()));
+        DispatchAsync(
+            Email(driver, "Driver application approved", () => email.SendDriverApprovedAsync(driver.Email!, FullName(driver))),
+            Sms(driver, SmsUtils.DriverApproved(), () => sms.SendSmsAsync(driver.PhoneNumber, SmsUtils.DriverApproved())));
 
     public Task SendDriverRejectedAsync(User driver, string? reason) =>
-        Task.WhenAll(
-            email.SendDriverRejectedAsync(driver.Email!, FullName(driver), reason),
-            sms.SendSmsAsync(driver.PhoneNumber, SmsUtils.DriverRejected(reason)));
+        DispatchAsync(
+            Email(driver, "Driver application rejected",
+                () => email.SendDriverRejectedAsync(driver.Email!, FullName(driver), reason)),
+            Sms(driver, SmsUtils.DriverRejected(reason),
+                () => sms.SendSmsAsync(driver.PhoneNumber, SmsUtils.DriverRejected(reason))));
 
-    private static string FullName(User user) => $"{user.FirstName} {user.LastName}";
+    /// <summary>
+    /// Sends all messages in parallel, then records each one in the Notifications table.
+    /// Recording happens sequentially because the DbContext does not support concurrent operations.
+    /// </summary>
+    private async Task DispatchAsync(params Outgoing[] messages)
+    {
+        var results = await Task.WhenAll(messages.Select(m => m.Send()));
+
+        try
+        {
+            for (var i = 0; i < messages.Length; i++)
+            {
+                var message = messages[i];
+                await notificationRepository.AddAsync(new Notification
+                {
+                    UserId = message.User.Id,
+                    Type = message.Type,
+                    Recipient = message.Recipient ?? string.Empty,
+                    Subject = message.Subject,
+                    Message = message.LogMessage,
+                    IsSent = results[i],
+                    SentAt = results[i] ? DateTime.UtcNow : null,
+                    CreatedAt = DateTime.UtcNow
+                });
+            }
+
+            await notificationRepository.SaveChangesAsync();
+        }
+        catch (Exception ex)
+        {
+            // A failure to record a notification must not fail the business operation that triggered it.
+            logger.LogError(ex, "Failed to record {Count} notification(s).", messages.Length);
+        }
+    }
+
+    private static Outgoing Email(User user, string subject, Func<Task<bool>> send) =>
+        new(user, "Email", user.Email, subject, subject, send);
+
+    private static Outgoing Sms(User user, string logMessage, Func<Task<bool>> send) =>
+        new(user, "SMS", user.PhoneNumber, null, logMessage, send);
+
+    private static string FullName(User user) => $"{user.FirstName} {user.LastName}".Trim();
+
+    private sealed record Outgoing(
+        User User,
+        string Type,
+        string? Recipient,
+        string? Subject,
+        string LogMessage,
+        Func<Task<bool>> Send);
 }

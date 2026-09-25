@@ -7,5 +7,8 @@ public class AuditLog
     public User? User { get; set; }
     public string? Action { get; set; }
     public string? Status { get; set; }
+    public string? TargetEntity { get; set; }
+    public int? TargetId { get; set; }
+    public string? Details { get; set; }
     public DateTime CreatedAt { get; set; }
 }

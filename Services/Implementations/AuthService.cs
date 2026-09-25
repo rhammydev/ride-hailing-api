@@ -73,14 +73,7 @@ public class AuthService(
             });
             await auditLogRepository.SaveChangesAsync();
 
-            await Task.WhenAll(
-                notificationService.SendOtpEmailAsync(
-                    user.Email ?? email,
-                    $"{user.FirstName} {user.LastName}".Trim(),
-                    emailOtpCode
-                ),
-                notificationService.SendOtpSmsAsync(user.PhoneNumber, phoneOtpCode)
-            );
+            await notificationService.SendVerificationOtpsAsync(user, emailOtpCode, phoneOtpCode);
 
             logger.LogInformation("Registered {Role} with ID {UserId} ({Email})", user.Role, user.Id, user.Email);
 
@@ -304,15 +297,11 @@ public class AuthService(
 
             if (isEmail)
             {
-                await notificationService.SendOtpEmailAsync(
-                    user.Email ?? email,
-                    $"{user.FirstName} {user.LastName}".Trim(),
-                    otpCode
-                );
+                await notificationService.SendEmailOtpAsync(user, otpCode);
                 return ApiResponse.Success("A new verification OTP has been sent to your email.");
             }
 
-            await notificationService.SendOtpSmsAsync(user.PhoneNumber, otpCode);
+            await notificationService.SendPhoneOtpAsync(user, otpCode);
             return ApiResponse.Success("A new verification OTP has been sent to your phone number.");
         }
         catch (Exception ex)
@@ -342,12 +331,7 @@ public class AuthService(
                 });
                 await auditLogRepository.SaveChangesAsync();
 
-                await notificationService.SendPasswordResetOtpAsync(
-                    user.Email ?? string.Empty,
-                    $"{user.FirstName} {user.LastName}".Trim(),
-                    user.PhoneNumber,
-                    otpCode
-                );
+                await notificationService.SendPasswordResetOtpAsync(user, otpCode);
             }
 
             // User Story 35: Password-reset responses must not expose whether an email address exists.
@@ -399,11 +383,7 @@ public class AuthService(
             });
             await auditLogRepository.SaveChangesAsync();
 
-            await notificationService.SendPasswordChangedAsync(
-                user.Email ?? string.Empty,
-                $"{user.FirstName} {user.LastName}".Trim(),
-                user.PhoneNumber
-            );
+            await notificationService.SendPasswordChangedAsync(user);
 
             return ApiResponse.Success("Password has been reset successfully. You can now log in.");
         }
@@ -443,11 +423,7 @@ public class AuthService(
             await auditLogRepository.SaveChangesAsync();
 
             // Story 76: Send security notification after a successful password change.
-            await notificationService.SendPasswordChangedAsync(
-                user.Email ?? string.Empty,
-                $"{user.FirstName} {user.LastName}".Trim(),
-                user.PhoneNumber
-            );
+            await notificationService.SendPasswordChangedAsync(user);
 
             return ApiResponse.Success("Password changed successfully.");
         }

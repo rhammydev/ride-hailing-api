@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using Microsoft.EntityFrameworkCore;
 using Ride_Hailing_API.Domain.Entities;
 using Ride_Hailing_API.Domain.Enums;
 using Ride_Hailing_API.DTOs.Generic;
@@ -63,6 +64,9 @@ public class RideService(
                 UserId = passengerId,
                 Action = "RideCreation",
                 Status = "Success",
+                TargetEntity = "Ride",
+                TargetId = ride.Id,
+                Details = ride.Reference,
                 CreatedAt = DateTime.UtcNow
             });
 
@@ -214,6 +218,9 @@ public class RideService(
                 UserId = driverId,
                 Action = "RideAcceptance",
                 Status = "Success",
+                TargetEntity = "Ride",
+                TargetId = ride.Id,
+                Details = ride.Reference,
                 CreatedAt = DateTime.UtcNow
             });
 
@@ -228,6 +235,12 @@ public class RideService(
 
             var response = MapToResponse(ride, ride.Passenger, driverUser);
             return ApiResponse.Success("Ride accepted successfully.", response);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            // Ride.RowVersion changed between read and save: another driver accepted it (or it was cancelled) first.
+            logger.LogWarning("Concurrency conflict while Driver {DriverId} accepted Ride {RideId}", driverId, rideId);
+            return ApiResponse.Fail("This ride was just updated by someone else and is no longer available.", 409, ResponseCodes.BadRequest);
         }
         catch (Exception ex)
         {
@@ -284,8 +297,11 @@ public class RideService(
             await auditLogRepository.AddAsync(new AuditLog
             {
                 UserId = driverId,
-                Action = "RideStatusChange",
+                Action = request.Status == RideStatus.Completed ? "RideCompletion" : "RideStatusChange",
                 Status = request.Status.ToString(),
+                TargetEntity = "Ride",
+                TargetId = ride.Id,
+                Details = $"{ride.Reference}: {previousStatus} -> {request.Status}",
                 CreatedAt = DateTime.UtcNow
             });
 
@@ -308,6 +324,11 @@ public class RideService(
 
             var response = MapToResponse(ride, ride.Passenger, ride.Driver);
             return ApiResponse.Success($"Ride status updated to {request.Status}.", response);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            logger.LogWarning("Concurrency conflict while Driver {DriverId} updated Ride {RideId}", driverId, rideId);
+            return ApiResponse.Fail("This ride was just updated by someone else. Refresh and try again.", 409, ResponseCodes.BadRequest);
         }
         catch (Exception ex)
         {
@@ -372,6 +393,9 @@ public class RideService(
                 UserId = userId,
                 Action = "RideCancellation",
                 Status = "Success",
+                TargetEntity = "Ride",
+                TargetId = ride.Id,
+                Details = $"{ride.Reference}: {previousStatus} -> Cancelled. Reason: {request.Reason.Trim()}",
                 CreatedAt = DateTime.UtcNow
             });
 
@@ -388,6 +412,11 @@ public class RideService(
 
             var response = MapToResponse(ride, ride.Passenger, ride.Driver);
             return ApiResponse.Success("Ride cancelled successfully.", response);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            logger.LogWarning("Concurrency conflict while User {UserId} cancelled Ride {RideId}", userId, rideId);
+            return ApiResponse.Fail("This ride was just updated by someone else. Refresh and try again.", 409, ResponseCodes.BadRequest);
         }
         catch (Exception ex)
         {

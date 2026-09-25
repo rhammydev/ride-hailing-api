@@ -4,15 +4,16 @@ namespace Ride_Hailing_API.Services.Interfaces;
 
 public interface INotificationService
 {
-    Task SendOtpEmailAsync(string email, string fullName, string otp);
-    Task SendOtpSmsAsync(string? recipient, string otp);
-    Task SendWelcomeEmailAsync(string email, string fullName, string userId);
-    Task SendAccountVerifiedEmailAsync(string email, string fullName, string userId);
-    Task SendLoginAlertAsync(string email, string fullName);
-    Task SendPasswordChangedAsync(string email, string fullName, string? phoneNumber);
-    Task SendPasswordResetOtpAsync(string email, string fullName, string? phoneNumber, string otp);
-    Task SendProfileUpdatedEmailAsync(string email, string fullName);
-    Task SendAccountDeactivatedAsync(string email, string fullName, string? phoneNumber);
+    Task SendVerificationOtpsAsync(User user, string emailOtp, string phoneOtp);
+    Task SendEmailOtpAsync(User user, string otp);
+    Task SendPhoneOtpAsync(User user, string otp);
+    Task SendWelcomeEmailAsync(User user);
+    Task SendAccountVerifiedEmailAsync(User user);
+    Task SendLoginAlertAsync(User user);
+    Task SendPasswordChangedAsync(User user);
+    Task SendPasswordResetOtpAsync(User user, string otp);
+    Task SendProfileUpdatedEmailAsync(User user);
+    Task SendAccountDeactivatedAsync(User user);
     Task SendRideStatusAsync(User passenger, User? driver, Ride ride, string status);
     Task SendDriverApprovedAsync(User driver);
     Task SendDriverRejectedAsync(User driver, string? reason);

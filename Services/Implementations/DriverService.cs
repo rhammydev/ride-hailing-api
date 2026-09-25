@@ -44,7 +44,8 @@ public class DriverService(
                     DriverLicence = request.DriverLicence.Trim(),
                     Nin = request.Nin.Trim(),
                     Status = ApprovalStatus.Pending,
-                    IsAvailable = false
+                    IsAvailable = false,
+                    SubmittedAt = DateTime.UtcNow
                 };
                 await driverRepository.AddKycAsync(kyc);
             }
@@ -52,7 +53,12 @@ public class DriverService(
             {
                 kyc.DriverLicence = request.DriverLicence.Trim();
                 kyc.Nin = request.Nin.Trim();
+                // Resubmitting sends the application back for review.
                 kyc.Status = ApprovalStatus.Pending;
+                kyc.IsAvailable = false;
+                kyc.ApproverId = null;
+                kyc.ApprovedAt = null;
+                kyc.SubmittedAt = DateTime.UtcNow;
                 driverRepository.UpdateKyc(kyc);
             }
 
@@ -89,6 +95,8 @@ public class DriverService(
                 UserId = driverId,
                 Action = "DriverOnboarding",
                 Status = "Success",
+                TargetEntity = "Driver",
+                TargetId = driverId,
                 CreatedAt = DateTime.UtcNow
             });
             await auditLogRepository.SaveChangesAsync();

@@ -13,6 +13,7 @@ public class AdminService(
     IDriverRepository driverRepository,
     IRideRepository rideRepository,
     IAuditLogRepository auditLogRepository,
+    INotificationRepository notificationRepository,
     INotificationService notificationService,
     ILogger<AdminService> logger) : IAdminService
 {
@@ -43,33 +44,40 @@ public class AdminService(
         }
     }
 
+    public async Task<ApiResponse> GetAllDriversAsync()
+    {
+        try
+        {
+            var drivers = await userRepository.GetUsersByRoleAsync(UserRole.Driver);
+            var kycs = (await driverRepository.GetAllDriversAsync()).ToDictionary(k => k.UserId);
+            var vehicles = (await driverRepository.GetVehiclesByDriverIdsAsync(drivers.Select(d => d.Id)))
+                .ToDictionary(v => v.DriverId);
+
+            var response = drivers
+                .Select(d => MapDriver(d, kycs.GetValueOrDefault(d.Id), vehicles.GetValueOrDefault(d.Id)))
+                .ToList();
+
+            return ApiResponse.Success("Drivers retrieved successfully.", response);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to retrieve drivers for Admin");
+            return ApiResponse.Fail("An unexpected error occurred while retrieving drivers.", 500, ResponseCodes.ServerError);
+        }
+    }
+
     public async Task<ApiResponse> GetPendingDriversAsync()
     {
         try
         {
             var pendingKycs = await driverRepository.GetPendingDriversAsync();
-            var result = new List<PendingDriverResponse>();
+            var vehicles = (await driverRepository.GetVehiclesByDriverIdsAsync(pendingKycs.Select(k => k.UserId)))
+                .ToDictionary(v => v.DriverId);
 
-            foreach (var kyc in pendingKycs)
-            {
-                var vehicle = await driverRepository.GetVehicleByDriverIdAsync(kyc.UserId);
-                result.Add(new PendingDriverResponse
-                {
-                    KycId = kyc.Id,
-                    UserId = kyc.UserId,
-                    FullName = kyc.User != null ? $"{kyc.User.FirstName} {kyc.User.LastName}".Trim() : string.Empty,
-                    Email = kyc.User?.Email ?? string.Empty,
-                    PhoneNumber = kyc.User?.PhoneNumber ?? string.Empty,
-                    DriverLicence = kyc.DriverLicence ?? string.Empty,
-                    Nin = kyc.Nin ?? string.Empty,
-                    Status = kyc.Status,
-                    VehicleMake = vehicle?.Make,
-                    VehicleModel = vehicle?.Model,
-                    VehiclePlateNumber = vehicle?.PlateNumber,
-                    VehicleColor = vehicle?.Color,
-                    SubmittedAt = kyc.ApprovedAt
-                });
-            }
+            var result = pendingKycs
+                .Where(k => k.User != null)
+                .Select(k => MapDriver(k.User!, k, vehicles.GetValueOrDefault(k.UserId)))
+                .ToList();
 
             return ApiResponse.Success("Pending driver applications retrieved successfully.", result);
         }
@@ -90,6 +98,14 @@ public class AdminService(
                 return ApiResponse.Fail("Driver application not found.", 404, ResponseCodes.NotFound);
             }
 
+            if (kyc.Status != ApprovalStatus.Pending)
+            {
+                return ApiResponse.Fail(
+                    $"Only pending applications can be approved. This application is {kyc.Status}.",
+                    400,
+                    ResponseCodes.BadRequest);
+            }
+
             kyc.Status = ApprovalStatus.Approved;
             kyc.ApproverId = adminId;
             kyc.ApprovedAt = DateTime.UtcNow;
@@ -102,6 +118,8 @@ public class AdminService(
                 UserId = adminId,
                 Action = "DriverApproval",
                 Status = "Approved",
+                TargetEntity = "Driver",
+                TargetId = driverId,
                 CreatedAt = DateTime.UtcNow
             });
             await auditLogRepository.SaveChangesAsync();
@@ -133,6 +151,14 @@ public class AdminService(
                 return ApiResponse.Fail("Driver application not found.", 404, ResponseCodes.NotFound);
             }
 
+            if (kyc.Status != ApprovalStatus.Pending)
+            {
+                return ApiResponse.Fail(
+                    $"Only pending applications can be rejected. This application is {kyc.Status}.",
+                    400,
+                    ResponseCodes.BadRequest);
+            }
+
             kyc.Status = ApprovalStatus.Rejected;
             kyc.IsAvailable = false;
 
@@ -144,6 +170,9 @@ public class AdminService(
                 UserId = adminId,
                 Action = "DriverRejection",
                 Status = "Rejected",
+                TargetEntity = "Driver",
+                TargetId = driverId,
+                Details = request.Reason.Trim(),
                 CreatedAt = DateTime.UtcNow
             });
             await auditLogRepository.SaveChangesAsync();
@@ -169,13 +198,24 @@ public class AdminService(
     {
         try
         {
+            if (targetUserId == adminId && !request.IsActive)
+            {
+                return ApiResponse.Fail("You cannot deactivate your own account.", 400, ResponseCodes.BadRequest);
+            }
+
             var user = await userRepository.GetByIdAsync(targetUserId);
             if (user == null)
             {
                 return ApiResponse.Fail("User not found.", 404, ResponseCodes.NotFound);
             }
 
+            if (user.IsActive == request.IsActive)
+            {
+                return ApiResponse.Success($"User is already {(request.IsActive ? "active" : "inactive")}.");
+            }
+
             user.IsActive = request.IsActive;
+            user.UpdatedAt = DateTime.UtcNow;
             userRepository.Update(user);
 
             if (!request.IsActive && user.Role == UserRole.Driver)
@@ -195,9 +235,16 @@ public class AdminService(
                 UserId = adminId,
                 Action = "UserStatusUpdate",
                 Status = request.IsActive ? "Activated" : "Deactivated",
+                TargetEntity = "User",
+                TargetId = targetUserId,
                 CreatedAt = DateTime.UtcNow
             });
             await auditLogRepository.SaveChangesAsync();
+
+            if (!request.IsActive)
+            {
+                await notificationService.SendAccountDeactivatedAsync(user);
+            }
 
             var actionWord = request.IsActive ? "activated" : "deactivated";
             logger.LogInformation("User {TargetUserId} {ActionWord} by Admin {AdminId}", targetUserId, actionWord, adminId);
@@ -254,6 +301,9 @@ public class AdminService(
                 UserEmail = l.User?.Email,
                 Action = l.Action ?? string.Empty,
                 Status = l.Status ?? string.Empty,
+                TargetEntity = l.TargetEntity,
+                TargetId = l.TargetId,
+                Details = l.Details,
                 CreatedAt = l.CreatedAt
             }).ToList();
 
@@ -265,4 +315,53 @@ public class AdminService(
             return ApiResponse.Fail("An unexpected error occurred while retrieving audit logs.", 500, ResponseCodes.ServerError);
         }
     }
+
+    public async Task<ApiResponse> GetNotificationsAsync()
+    {
+        try
+        {
+            var notifications = await notificationRepository.GetAllAsync();
+            var response = notifications.Select(n => new NotificationResponse
+            {
+                Id = n.Id,
+                UserId = n.UserId,
+                UserEmail = n.User?.Email,
+                Type = n.Type,
+                Recipient = n.Recipient,
+                Subject = n.Subject,
+                Message = n.Message,
+                IsSent = n.IsSent,
+                SentAt = n.SentAt,
+                CreatedAt = n.CreatedAt
+            }).ToList();
+
+            return ApiResponse.Success("Notifications retrieved successfully.", response);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to retrieve notifications for Admin");
+            return ApiResponse.Fail("An unexpected error occurred while retrieving notifications.", 500, ResponseCodes.ServerError);
+        }
+    }
+
+    private static DriverApplicationResponse MapDriver(User user, Kyc? kyc, Vehicle? vehicle) =>
+        new()
+        {
+            KycId = kyc?.Id,
+            UserId = user.Id,
+            FullName = $"{user.FirstName} {user.LastName}".Trim(),
+            Email = user.Email ?? string.Empty,
+            PhoneNumber = user.PhoneNumber ?? string.Empty,
+            IsActive = user.IsActive,
+            DriverLicence = kyc?.DriverLicence,
+            Nin = kyc?.Nin,
+            Status = kyc?.Status,
+            IsAvailable = kyc?.IsAvailable ?? false,
+            VehicleMake = vehicle?.Make,
+            VehicleModel = vehicle?.Model,
+            VehiclePlateNumber = vehicle?.PlateNumber,
+            VehicleColor = vehicle?.Color,
+            SubmittedAt = kyc?.SubmittedAt,
+            ApprovedAt = kyc?.ApprovedAt
+        };
 }

@@ -12,12 +12,12 @@ public class TelecomAbodeSmsService(
 {
     private readonly TelecomAbode _settings = options.Value;
 
-    public async Task SendSmsAsync(string? recipientNumber, string message)
+    public async Task<bool> SendSmsAsync(string? recipientNumber, string message)
     {
         if (!IsConfigured())
         {
             logger.LogWarning("TelecomAbode is not configured. SMS delivery was skipped.");
-            return;
+            return false;
         }
 
         var recipients = ParseRecipients(recipientNumber);
@@ -25,7 +25,7 @@ public class TelecomAbodeSmsService(
         if (recipients.Count == 0)
         {
             logger.LogWarning("SMS delivery was skipped because neither a recipient nor fallback recipient is configured.");
-            return;
+            return false;
         }
 
         var bulkPhones = string.Join(',', recipients);
@@ -47,16 +47,19 @@ public class TelecomAbodeSmsService(
             if (response.IsSuccessStatusCode)
             {
                 logger.LogInformation("TelecomAbode accepted SMS delivery for {RecipientCount} recipient(s).", recipients.Count);
+                return true;
             }
             else
             {
                 logger.LogWarning("TelecomAbode rejected SMS delivery with status {StatusCode}. Response: {Response}",
                     (int)response.StatusCode, responseBody);
+                return false;
             }
         }
         catch (Exception exception)
         {
             logger.LogError(exception, "An error occurred while sending SMS through TelecomAbode.");
+            return false;
         }
     }
 

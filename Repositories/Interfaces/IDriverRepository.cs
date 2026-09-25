@@ -12,6 +12,7 @@ public interface IDriverRepository
     void UpdateKyc(Kyc kyc);
 
     Task<Vehicle?> GetVehicleByDriverIdAsync(int driverId);
+    Task<List<Vehicle>> GetVehiclesByDriverIdsAsync(IEnumerable<int> driverIds);
     Task<bool> PlateNumberExistsAsync(string plateNumber);
     Task AddVehicleAsync(Vehicle vehicle);
     void UpdateVehicle(Vehicle vehicle);

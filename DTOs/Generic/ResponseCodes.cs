@@ -1,6 +1,6 @@
 namespace Ride_Hailing_API.DTOs.Generic;
 
-public class ResponseCodes
+public static class ResponseCodes
 {
     public const string Success = "00";
     public const string ServerError = "55";

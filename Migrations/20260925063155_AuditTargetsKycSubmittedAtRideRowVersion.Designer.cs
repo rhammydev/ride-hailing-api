@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Ride_Hailing_API.Data;
 
@@ -11,9 +12,11 @@ using Ride_Hailing_API.Data;
 namespace Ride_Hailing_API.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260925063155_AuditTargetsKycSubmittedAtRideRowVersion")]
+    partial class AuditTargetsKycSubmittedAtRideRowVersion
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -59,7 +62,7 @@ namespace Ride_Hailing_API.Migrations
 
                     b.HasIndex("TargetEntity", "TargetId");
 
-                    b.ToTable("AuditLogs", (string)null);
+                    b.ToTable("AuditLogs");
                 });
 
             modelBuilder.Entity("Ride_Hailing_API.Domain.Entities.Kyc", b =>
@@ -100,7 +103,7 @@ namespace Ride_Hailing_API.Migrations
                     b.HasIndex("UserId")
                         .IsUnique();
 
-                    b.ToTable("Kycs", (string)null);
+                    b.ToTable("Kycs");
                 });
 
             modelBuilder.Entity("Ride_Hailing_API.Domain.Entities.Notification", b =>
@@ -142,7 +145,7 @@ namespace Ride_Hailing_API.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("Notifications", (string)null);
+                    b.ToTable("Notifications");
                 });
 
             modelBuilder.Entity("Ride_Hailing_API.Domain.Entities.Otp", b =>
@@ -179,7 +182,7 @@ namespace Ride_Hailing_API.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("Otps", (string)null);
+                    b.ToTable("Otps");
                 });
 
             modelBuilder.Entity("Ride_Hailing_API.Domain.Entities.Ride", b =>
@@ -236,7 +239,7 @@ namespace Ride_Hailing_API.Migrations
                         .IsUnique()
                         .HasFilter("[Reference] IS NOT NULL");
 
-                    b.ToTable("Rides", (string)null);
+                    b.ToTable("Rides");
                 });
 
             modelBuilder.Entity("Ride_Hailing_API.Domain.Entities.RideStatusHistory", b =>
@@ -271,7 +274,7 @@ namespace Ride_Hailing_API.Migrations
 
                     b.HasIndex("RideId");
 
-                    b.ToTable("RidesStatusHistories", (string)null);
+                    b.ToTable("RidesStatusHistories");
                 });
 
             modelBuilder.Entity("Ride_Hailing_API.Domain.Entities.User", b =>
@@ -326,7 +329,7 @@ namespace Ride_Hailing_API.Migrations
                         .IsUnique()
                         .HasFilter("[PhoneNumber] IS NOT NULL");
 
-                    b.ToTable("Users", (string)null);
+                    b.ToTable("Users");
                 });
 
             modelBuilder.Entity("Ride_Hailing_API.Domain.Entities.Vehicle", b =>
@@ -367,7 +370,7 @@ namespace Ride_Hailing_API.Migrations
                         .IsUnique()
                         .HasFilter("[PlateNumber] IS NOT NULL");
 
-                    b.ToTable("Vehicles", (string)null);
+                    b.ToTable("Vehicles");
                 });
 
             modelBuilder.Entity("Ride_Hailing_API.Domain.Entities.AuditLog", b =>

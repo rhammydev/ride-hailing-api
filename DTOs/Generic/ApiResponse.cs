@@ -10,8 +10,8 @@ public class ApiResponse
     [JsonIgnore] public int HttpStatusCode { get; init; }
 
     public static ApiResponse Success(string message, object? data = null, int statusCode = 200) =>
-        new() { ResponseCode = "00", ResponseMessage = message, Data = data, HttpStatusCode = statusCode };
+        new() { ResponseCode = ResponseCodes.Success, ResponseMessage = message, Data = data, HttpStatusCode = statusCode };
 
-    public static ApiResponse Fail(string message, int statusCode = 400, string code = "99", object? data = null) =>
+    public static ApiResponse Fail(string message, int statusCode = 400, string code = ResponseCodes.BadRequest, object? data = null) =>
         new() { ResponseCode = code, ResponseMessage = message, Data = data, HttpStatusCode = statusCode };
 }

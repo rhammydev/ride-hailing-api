@@ -21,6 +21,9 @@ public class AdminController(IAdminService admin) : ControllerBase
     public async Task<IActionResult> UpdateUserStatus(int id, UpdateUserStatusRequest request) =>
         Respond(await admin.UpdateUserStatusAsync(User.GetUserId(), id, request));
 
+    [HttpGet("drivers")]
+    public async Task<IActionResult> GetAllDrivers() => Respond(await admin.GetAllDriversAsync());
+
     [HttpGet("drivers/pending")]
     public async Task<IActionResult> GetPendingDrivers() => Respond(await admin.GetPendingDriversAsync());
 
@@ -36,4 +39,7 @@ public class AdminController(IAdminService admin) : ControllerBase
 
     [HttpGet("audit-logs")]
     public async Task<IActionResult> GetAuditLogs() => Respond(await admin.GetAuditLogsAsync());
+
+    [HttpGet("notifications")]
+    public async Task<IActionResult> GetNotifications() => Respond(await admin.GetNotificationsAsync());
 }

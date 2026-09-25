@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using Ride_Hailing_API.Domain.Enums;
 
 namespace Ride_Hailing_API.Domain.Entities;
@@ -15,6 +16,8 @@ public class Ride
     public DateTime? CancelledAt { get; set; }
     public DateTime? CompletedAt { get; set; }
     public DateTime CreatedAt { get; set; }
+    [Timestamp]
+    public byte[]? RowVersion { get; set; }
     public User? Passenger { get; set; }
     public User? Driver { get; set; }
 }

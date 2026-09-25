@@ -1,8 +1,10 @@
+using System.Security.Claims;
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using Ride_Hailing_API.Domain.Settings;
 using Ride_Hailing_API.DTOs.Generic;
+using Ride_Hailing_API.Repositories.Interfaces;
 
 namespace Ride_Hailing_API.Extensions;
 
@@ -41,6 +43,23 @@ public static class AuthenticationExtensions
                 // Return the standard ApiResponse body for 401 and 403 instead of an empty response.
                 options.Events = new JwtBearerEvents
                 {
+                    // Tokens issued before a user was deactivated must stop working immediately.
+                    OnTokenValidated = async context =>
+                    {
+                        var userIdClaim = context.Principal?.FindFirstValue(ClaimTypes.NameIdentifier);
+                        if (!int.TryParse(userIdClaim, out var userId))
+                        {
+                            context.Fail("Token does not identify a user.");
+                            return;
+                        }
+
+                        var users = context.HttpContext.RequestServices.GetRequiredService<IUserRepository>();
+                        var user = await users.GetByIdAsync(userId);
+                        if (user is not { IsActive: true })
+                        {
+                            context.Fail("User account is inactive or no longer exists.");
+                        }
+                    },
                     OnChallenge = async context =>
                     {
                         context.HandleResponse();

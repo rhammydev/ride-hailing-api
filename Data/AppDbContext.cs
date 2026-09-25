@@ -77,5 +77,16 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         modelBuilder.Entity<Vehicle>()
             .HasIndex(v => v.PlateNumber)
             .IsUnique();
+
+        modelBuilder.Entity<AuditLog>()
+            .Property(a => a.TargetEntity)
+            .HasMaxLength(50);
+
+        modelBuilder.Entity<AuditLog>()
+            .Property(a => a.Details)
+            .HasMaxLength(500);
+
+        modelBuilder.Entity<AuditLog>()
+            .HasIndex(a => new { a.TargetEntity, a.TargetId });
     }
 }

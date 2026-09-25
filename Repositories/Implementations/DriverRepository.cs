@@ -40,6 +40,12 @@ public class DriverRepository(AppDbContext context) : IDriverRepository
     public Task<Vehicle?> GetVehicleByDriverIdAsync(int driverId) =>
         context.Vehicles.FirstOrDefaultAsync(x => x.DriverId == driverId);
 
+    public async Task<List<Vehicle>> GetVehiclesByDriverIdsAsync(IEnumerable<int> driverIds)
+    {
+        var ids = driverIds.ToList();
+        return await context.Vehicles.Where(x => ids.Contains(x.DriverId)).ToListAsync();
+    }
+
     public Task<bool> PlateNumberExistsAsync(string plateNumber) =>
         context.Vehicles.AnyAsync(x => x.PlateNumber == plateNumber);
 

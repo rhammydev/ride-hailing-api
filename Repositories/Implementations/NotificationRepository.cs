@@ -10,6 +10,12 @@ public class NotificationRepository(AppDbContext context) : INotificationReposit
     public async Task AddAsync(Notification notification) =>
         await context.Notifications.AddAsync(notification);
 
+    public async Task<List<Notification>> GetAllAsync() =>
+        await context.Notifications
+            .Include(x => x.User)
+            .OrderByDescending(x => x.CreatedAt)
+            .ToListAsync();
+
     public async Task<List<Notification>> GetByUserIdAsync(int userId) =>
         await context.Notifications
             .Where(x => x.UserId == userId)

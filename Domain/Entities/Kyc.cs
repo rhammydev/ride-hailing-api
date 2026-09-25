@@ -10,6 +10,7 @@ public class Kyc
     public string? DriverLicence { get; set; }
     public string? Nin { get; set; }
     public ApprovalStatus Status { get; set; }
+    public DateTime? SubmittedAt { get; set; }
     public bool IsAvailable { get; set; }
     public int? ApproverId { get; set; }
     public DateTime? ApprovedAt { get; set; }
