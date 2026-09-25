@@ -32,6 +32,7 @@ public class RideRepository(AppDbContext context) : IRideRepository
 
     public async Task<List<Ride>> GetPassengerRidesAsync(int passengerId) =>
         await context.Rides
+            .Include(r => r.Passenger)
             .Include(r => r.Driver)
             .Where(r => r.PassengerId == passengerId)
             .OrderByDescending(r => r.CreatedAt)
@@ -40,6 +41,7 @@ public class RideRepository(AppDbContext context) : IRideRepository
     public async Task<List<Ride>> GetDriverRidesAsync(int driverId) =>
         await context.Rides
             .Include(r => r.Passenger)
+            .Include(r => r.Driver)
             .Where(r => r.DriverId == driverId)
             .OrderByDescending(r => r.CreatedAt)
             .ToListAsync();
@@ -53,6 +55,7 @@ public class RideRepository(AppDbContext context) : IRideRepository
 
     public Task<Ride?> GetActiveRideForPassengerAsync(int passengerId) =>
         context.Rides
+            .Include(r => r.Passenger)
             .Include(r => r.Driver)
             .Where(r => r.PassengerId == passengerId &&
                         r.Status != RideStatus.Completed &&

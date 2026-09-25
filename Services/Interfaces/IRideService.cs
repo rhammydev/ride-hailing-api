@@ -8,6 +8,7 @@ public interface IRideService
 {
     Task<ApiResponse> CreateRideAsync(int passengerId, CreateRideRequest request);
     Task<ApiResponse> GetPassengerRidesAsync(int passengerId);
+    Task<ApiResponse> GetCurrentRideAsync(int passengerId);
     Task<ApiResponse> GetDriverRidesAsync(int driverId);
     Task<ApiResponse> GetRideByIdAsync(int rideId, int userId, UserRole role);
     Task<ApiResponse> AcceptRideAsync(int driverId, int rideId);

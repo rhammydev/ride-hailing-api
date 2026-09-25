@@ -96,6 +96,25 @@ public class RideService(
         }
     }
 
+    public async Task<ApiResponse> GetCurrentRideAsync(int passengerId)
+    {
+        try
+        {
+            var ride = await rideRepository.GetActiveRideForPassengerAsync(passengerId);
+            if (ride == null)
+            {
+                return ApiResponse.Fail("You do not have an active ride.", 404, ResponseCodes.NotFound);
+            }
+
+            return ApiResponse.Success("Current ride retrieved successfully.", MapToResponse(ride, ride.Passenger, ride.Driver));
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to retrieve current ride for Passenger {PassengerId}", passengerId);
+            return ApiResponse.Fail("An unexpected error occurred while retrieving the current ride.", 500, ResponseCodes.ServerError);
+        }
+    }
+
     public async Task<ApiResponse> GetDriverRidesAsync(int driverId)
     {
         try
